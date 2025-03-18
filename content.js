@@ -1,10 +1,10 @@
 class YoutubeBookmarker {
 	constructor() {
-		this.youtubeLeftControls = null;
-		this.youtubePlayer = null;
+		this.youtubeLeftControls = document.querySelector('.ytp-left-controls');
+		this.youtubePlayer = document.querySelector('.video-stream');
 		this.currentVideoBookmarks = [];
 
-		// newVideoLoaded();
+		newVideoLoaded();
 	}
 
 	fetchBookmarks = () => {
@@ -16,16 +16,18 @@ class YoutubeBookmarker {
 	};
 
 	addNewBookmarkEventHandler = async () => {
-		const currentTime = youtubePlayer.currentTime;
+		const currentTime = this.youtubePlayer.currentTime;
+
 		const newBookmark = {
 			time: currentTime,
-			desc: 'Bookmark at ' + getTime(currentTime),
+			desc: 'Marcar en ' + getTime(currentTime),
 		};
 
-		currentVideoBookmarks = await fetchBookmarks();
+		this.currentVideoBookmarks = await fetchBookmarks();
+		console.log('this.currentVideoBookmarks:', this.currentVideoBookmarks);
 
 		chrome.storage.sync.set({
-			[currentVideo]: JSON.stringify([...currentVideoBookmarks, newBookmark].sort((a, b) => a.time - b.time)),
+			[currentVideo]: JSON.stringify([...this.currentVideoBookmarks, newBookmark].sort((a, b) => a.time - b.time)),
 		});
 	};
 
@@ -37,22 +39,20 @@ class YoutubeBookmarker {
 	};
 
 	newVideoLoaded = async () => {
-		const bookmarkBtnExists = document.getElementsByClassName('bookmark-btn')[0];
+		const bookmarkBtnExists = document.querySelector('.ytp-button.bookmark-btn');
+		console.log('bookmarkBtnExists:', bookmarkBtnExists);
 
-		currentVideoBookmarks = await fetchBookmarks();
+		this.currentVideoBookmarks = await fetchBookmarks();
 
 		if (!bookmarkBtnExists) {
 			const bookmarkBtn = document.createElement('img');
 
-			bookmarkBtn.src = chrome.runtime.getURL('assets/bookmark.png');
+			bookmarkBtn.src = chrome.runtime.getURL('assets/bookmark.svg');
 			bookmarkBtn.className = 'ytp-button ' + 'bookmark-btn';
-			bookmarkBtn.title = 'Click to bookmark current timestamp';
+			bookmarkBtn.title = 'Haz clic para marcar la hora actual';
 
-			youtubeLeftControls = document.getElementsByClassName('ytp-left-controls')[0];
-			youtubePlayer = document.getElementsByClassName('video-stream')[0];
-
-			youtubeLeftControls.appendChild(bookmarkBtn);
-			bookmarkBtn.addEventListener('click', addNewBookmarkEventHandler);
+			this.youtubeLeftControls.appendChild(bookmarkBtn);
+			bookmarkBtn.addEventListener('click', this.addNewBookmarkEventHandler);
 		}
 	};
 
@@ -80,3 +80,8 @@ class YoutubeBookmarker {
 		}
 	}
 }
+
+window.addEventListener('load', () => {
+	new YoutubeBookmarker();
+	console.warn('Contenido cargado');
+});
