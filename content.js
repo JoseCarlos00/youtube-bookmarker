@@ -2,7 +2,6 @@ class YoutubeBookmarker {
 	constructor() {
 		this.youtubeLeftControls = null;
 		this.youtubePlayer = null;
-		this.youtubeTooltipWrapper = null;
 
 		this.currentButtonBookmarker = null;
 		this.currentVideo = '';
@@ -12,10 +11,6 @@ class YoutubeBookmarker {
 	}
 
 	observeDOMChanges() {
-		console.log('observeDOMChanges');
-
-		let initialize = false;
-
 		const observer = new MutationObserver(() => {
 			if (!this.youtubeLeftControls) {
 				this.youtubeLeftControls = document.querySelector('#player-container .ytp-left-controls');
@@ -25,21 +20,10 @@ class YoutubeBookmarker {
 				this.youtubePlayer = document.querySelector('#player-container .video-stream');
 			}
 
-			if (!this.youtubeTooltipWrapper) {
-				this.youtubeTooltipWrapper = document.querySelector('#player-container .ytp-tooltip');
-			}
-
-			if (this.youtubeLeftControls && this.youtubePlayer && !initialize) {
+			if (this.youtubeLeftControls && this.youtubePlayer) {
 				console.log('Elementos encontrados, inicializando...');
-				this.init();
-				initialize = true;
-			}
-
-			if (this.youtubeTooltipWrapper && initialize) {
-				const tooltipWrapperFound = new Event('tooltipWrapperFound');
-				window.dispatchEvent(tooltipWrapperFound);
-
 				observer.disconnect(); // Detiene la observación una vez que los elementos están listos
+				this.init();
 			}
 		});
 
@@ -51,16 +35,7 @@ class YoutubeBookmarker {
 		try {
 			console.log('Inicializando YouTubeBookmarker...');
 			this.newVideoLoaded();
-
-			window.addEventListener('tooltipWrapperFound', () => {
-				console.log('Wrapper de tooltip encontrado Event handler');
-
-				if (!this.currentButtonBookmarker) {
-					console.error('No se encontró el botón de bookmarker actual');
-				}
-
-				this.setEventMouseButton(this.currentButtonBookmarker);
-			});
+			this.eventChromeOnMessage();
 		} catch (error) {
 			console.error('Error en init():', error);
 		}
@@ -83,14 +58,14 @@ class YoutubeBookmarker {
 
 		const newBookmark = {
 			time: currentTime,
-			desc: 'Marcar en ' + getTime(currentTime),
+			desc: 'Marcar en ' + this.getTime(currentTime),
 		};
 
 		this.currentVideoBookmarks = await this.fetchBookmarks();
 		console.log('this.currentVideoBookmarks:', this.currentVideoBookmarks);
 
 		chrome.storage.sync.set({
-			[currentVideo]: JSON.stringify([...this.currentVideoBookmarks, newBookmark].sort((a, b) => a.time - b.time)),
+			[this.currentVideo]: JSON.stringify([...this.currentVideoBookmarks, newBookmark].sort((a, b) => a.time - b.time)),
 		});
 	};
 
@@ -108,33 +83,40 @@ class YoutubeBookmarker {
 
 		console.log({ youtubeTooltipWrapper: document.querySelector('#player-container .ytp-tooltip') });
 
-		if (!this.youtubeTooltipWrapper) {
-			throw new Error('[createButtonElement]: Tooltip wrapper not found');
-		}
-
 		bookmarkBtn.addEventListener('mouseover', (e) => handleEventMouseButton(e));
 		bookmarkBtn.addEventListener('mouseout', (e) => handleEventMouseButton(e));
 
-		const titleMark = 'Haz clic agregar un marcador';
-		const titleWrapper = this.youtubeTooltipWrapper.querySelector('.ytp-tooltip-text-no-title .ytp-tooltip-text');
+		const titleMark = 'Haz clic para agregar un marcador';
 
 		const handleEventMouseButton = (e) => {
-			const { type, target } = e;
+			const { type } = e;
+			const youtubeTooltipWrapper = document.querySelector('#player-container .ytp-tooltip');
+			const tooltipTextNoTitle = youtubeTooltipWrapper?.querySelector('.ytp-tooltip-text-no-title .ytp-tooltip-text');
+			const tooltipBg = youtubeTooltipWrapper?.querySelector('.ytp-tooltip-bg');
+
+			if (!youtubeTooltipWrapper || !tooltipTextNoTitle) {
+				console.warn('Tooltip wrapper or text not found');
+				return;
+			}
 
 			if (type === 'mouseover') {
-				console.log('En movimiento', titleWrapper);
-				titleWrapper?.innerHTML = titleMark;
+				tooltipTextNoTitle.innerHTML = titleMark;
 				bookmarkBtn.removeAttribute('title');
 
-				this.youtubeTooltipWrapper.style.removeProperty('display');
-				this.youtubeTooltipWrapper.style.left = '160.5px';
+				youtubeTooltipWrapper.style.removeProperty('display');
+				youtubeTooltipWrapper.classList.remove('ytp-preview');
+				youtubeTooltipWrapper.style.top = '188px';
+				youtubeTooltipWrapper.style.left = '160.5px';
+				youtubeTooltipWrapper.removeAttribute('aria-hidden');
+				tooltipBg && tooltipBg.style.removeProperty('background');
+
 				return;
 			}
 
 			if (type === 'mouseout') {
-				console.log('Fuera del elemento');
 				bookmarkBtn.setAttribute('title', titleMark);
-				this.youtubeTooltipWrapper.style.display = 'none';
+				youtubeTooltipWrapper.style.display = 'none';
+				youtubeTooltipWrapper.setAttribute('aria-hidden', 'true');
 			}
 		};
 	}
@@ -142,7 +124,7 @@ class YoutubeBookmarker {
 	createButtonElement() {
 		const bookmarkBtn = document.createElement('button');
 
-		const titleMark = 'Haz clic agregar un marcador';
+		const titleMark = 'Haz clic para agregar un marcador';
 
 		bookmarkBtn.className = 'ytp-button ' + 'bookmark-btn';
 		bookmarkBtn.title = titleMark;
@@ -161,8 +143,6 @@ class YoutubeBookmarker {
 	}
 
 	newVideoLoaded = async () => {
-		console.log('Nuevo video detectado');
-
 		if (!this.youtubeLeftControls) {
 			throw new Error('Could not find the YouTube left controls');
 		}
@@ -174,10 +154,8 @@ class YoutubeBookmarker {
 		if (!bookmarkBtnExists) {
 			const bookmarkBtn = this.createButtonElement();
 
-			this.currentButtonBookmarker = bookmarkBtn;
+			this.setEventMouseButton(bookmarkBtn);
 			this.youtubeLeftControls.appendChild(bookmarkBtn);
-
-			console.log(this.youtubeLeftControls, bookmarkBtn);
 
 			bookmarkBtn.addEventListener('click', this.addNewBookmarkEventHandler);
 		}
