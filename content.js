@@ -68,21 +68,22 @@ class YoutubeBookmarker {
 			};
 
 			this.currentVideoBookmarks = await this.fetchBookmarks();
-			console.log('this.currentVideoBookmarks:', this.currentVideoBookmarks);
 
 			const isExists = this.currentVideoBookmarks.find((bookmark) => bookmark.time === currentTime);
 
-			console.log({ isExists });
-
 			if (isExists) {
 				console.warn('Ya existe un marcador en este momento');
+				console.log({ isExists });
 				return;
 			}
 
 			if (!this.currentVideo) {
 				throw new Error('No video id selected');
 			}
-
+			/**
+			 * TODO: Implementar una alerta visual para el usuario
+			 * cuando se inserte un nuevo bookmark
+			 */
 			console.info('Guardar', newBookmark);
 
 			chrome.storage.sync.set({
@@ -194,8 +195,6 @@ class YoutubeBookmarker {
 
 	eventChromeOnMessage() {
 		try {
-			chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {});
-
 			// Escuchar los mensajes enviados desde background.js
 			chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 				console.log('Mensaje recibido en content.js:', message);
@@ -205,16 +204,30 @@ class YoutubeBookmarker {
 					this.currentVideo = videoId;
 					console.log('Nuevo video identificado:', videoId);
 					sendResponse({ status: 'OK', videoId: videoId });
+					return true;
 				}
 
-				// else if (type === 'PLAY') {
-				// 	youtubePlayer.currentTime = value;
-				// } else if (type === 'DELETE') {
-				// 	currentVideoBookmarks = currentVideoBookmarks.filter((b) => b.time != value);
-				// 	chrome.storage.sync.set({ [currentVideo]: JSON.stringify(currentVideoBookmarks) });
+				if (type === 'PLAY') {
+					this.youtubePlayer.currentTime = value;
+					return true;
+				}
 
-				// 	response(currentVideoBookmarks);
-				// }
+				if (type === 'DELETE') {
+					this.fetchBookmarks()
+						.then((bookmarks) => {
+							bookmarks = bookmarks.filter((b) => b.time != value);
+
+							chrome.storage.sync.set({ [this.currentVideo]: JSON.stringify(bookmarks) }, () => {
+								sendResponse({ status: 'OK', bookmarks });
+							});
+						})
+						.catch((error) => {
+							console.error(error);
+							sendResponse({ status: 'FAILED', error: 'No se pudo eliminar el marcador' });
+						});
+
+					return true; // Necesario para usar sendResponse de forma asíncrona
+				}
 
 				return true; // Esto es importante si `sendResponse` se usa de forma asíncrona
 			});

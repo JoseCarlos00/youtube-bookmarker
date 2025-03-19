@@ -24,7 +24,18 @@ const onDelete = async (e) => {
 			type: 'DELETE',
 			value: bookmarkTime,
 		},
-		renderBookmarks
+		(response) => {
+			console.log('response', response);
+
+			if (response.status === 'OK') {
+				renderBookmarks(response.bookmarks);
+				return;
+			}
+
+			if (response.status === 'FAILED') {
+				console.error('Error:', response);
+			}
+		}
 	);
 };
 
@@ -54,8 +65,6 @@ const addNewBookmark = (bookmarkListElement, bookmark) => {
 
 	newBookmarkElement.appendChild(bookmarkTitleElement);
 	newBookmarkElement.appendChild(controlsElement);
-
-	console.log({ newBookmarkElement });
 
 	bookmarkListElement.appendChild(newBookmarkElement);
 };
