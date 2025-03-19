@@ -99,9 +99,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 	const urlParameters = new URLSearchParams(queryParameters);
 
 	const currentVideo = urlParameters.get('v');
+	console.log({ currentVideo });
 
 	if (activeTab.url.includes('youtube.com/watch') && currentVideo) {
 		chrome.storage.sync.get([currentVideo], (data) => {
+			console.log({ data, currentVideo });
+
 			const currentVideoBookmarks = data[currentVideo] ? JSON.parse(data[currentVideo]) : [];
 
 			console.log({ currentVideoBookmarks });

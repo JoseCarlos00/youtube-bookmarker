@@ -64,6 +64,17 @@ class YoutubeBookmarker {
 		this.currentVideoBookmarks = await this.fetchBookmarks();
 		console.log('this.currentVideoBookmarks:', this.currentVideoBookmarks);
 
+		const isExists = this.currentVideoBookmarks.find((bookmark) => {
+			return bookmark.time === currentTime;
+		});
+
+		console.log({ isExists });
+
+		if (!isExists) {
+			console.warn('Ya existe un marcador en este momento');
+			return;
+		}
+
 		chrome.storage.sync.set({
 			[this.currentVideo]: JSON.stringify([...this.currentVideoBookmarks, newBookmark].sort((a, b) => a.time - b.time)),
 		});
@@ -143,6 +154,8 @@ class YoutubeBookmarker {
 	}
 
 	newVideoLoaded = async () => {
+		console.log('New video loaded');
+
 		if (!this.youtubeLeftControls) {
 			throw new Error('Could not find the YouTube left controls');
 		}
@@ -151,11 +164,12 @@ class YoutubeBookmarker {
 
 		this.currentVideoBookmarks = await this.fetchBookmarks();
 
-		if (!bookmarkBtnExists) {
+		if (bookmarkBtnExists) {
 			const bookmarkBtn = this.createButtonElement();
 
 			this.setEventMouseButton(bookmarkBtn);
 			this.youtubeLeftControls.appendChild(bookmarkBtn);
+			console.log({ bookmarkBtn, youtubeLeftControls: this.youtubeLeftControls });
 
 			bookmarkBtn.addEventListener('click', this.addNewBookmarkEventHandler);
 		}
@@ -190,10 +204,6 @@ window.addEventListener('load', () => {
 	try {
 		console.warn('Contenido cargado');
 		new YoutubeBookmarker();
-		console.log({
-			'container:': document.querySelector('#container'),
-			content: document.querySelector('#container')?.innerHTML,
-		});
 	} catch (error) {
 		console.error('Error crear instancia YoutubeBookmarker:', error);
 	}
