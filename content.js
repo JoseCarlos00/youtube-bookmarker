@@ -1,3 +1,11 @@
+// Verifica si el script de contenido se cargó correctamente
+console.log('content.js cargado correctamente en YouTube');
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+	if (message.type === 'PING') {
+		sendResponse({ status: 'READY' });
+	}
+});
+
 class YoutubeBookmarker {
 	constructor() {
 		this.youtubeLeftControls = null;
@@ -6,8 +14,6 @@ class YoutubeBookmarker {
 		this.currentButtonBookmarker = null;
 		this.currentVideo = '';
 		this.currentVideoBookmarks = [];
-
-		this.observeDOMChanges();
 	}
 
 	observeDOMChanges() {
@@ -35,7 +41,6 @@ class YoutubeBookmarker {
 		try {
 			console.log('Inicializando YouTubeBookmarker...');
 			this.newVideoLoaded();
-			this.eventChromeOnMessage();
 		} catch (error) {
 			console.error('Error en init():', error);
 		}
@@ -50,34 +55,44 @@ class YoutubeBookmarker {
 	};
 
 	addNewBookmarkEventHandler = async () => {
-		if (!this.youtubePlayer) {
-			throw new Error('Could not find the YouTube player');
+		try {
+			if (!this.youtubePlayer) {
+				throw new Error('Could not find the YouTube player');
+			}
+
+			const currentTime = this.youtubePlayer.currentTime;
+
+			const newBookmark = {
+				time: currentTime,
+				desc: 'Marcar en ' + this.getTime(currentTime),
+			};
+
+			this.currentVideoBookmarks = await this.fetchBookmarks();
+			console.log('this.currentVideoBookmarks:', this.currentVideoBookmarks);
+
+			const isExists = this.currentVideoBookmarks.find((bookmark) => bookmark.time === currentTime);
+
+			console.log({ isExists });
+
+			if (isExists) {
+				console.warn('Ya existe un marcador en este momento');
+				return;
+			}
+
+			if (!this.currentVideo) {
+				throw new Error('No video id selected');
+			}
+
+			console.info('Guardar', newBookmark);
+
+			chrome.storage.sync.set({
+				[this.currentVideo]: JSON.stringify(
+					[...this.currentVideoBookmarks, newBookmark].sort((a, b) => a.time - b.time)
+				),
+			});
+		} catch (error) {
+			console.error('Error en addNewBookmarkEventHandler():', error?.message);
 		}
-
-		const currentTime = this.youtubePlayer.currentTime;
-
-		const newBookmark = {
-			time: currentTime,
-			desc: 'Marcar en ' + this.getTime(currentTime),
-		};
-
-		this.currentVideoBookmarks = await this.fetchBookmarks();
-		console.log('this.currentVideoBookmarks:', this.currentVideoBookmarks);
-
-		const isExists = this.currentVideoBookmarks.find((bookmark) => {
-			return bookmark.time === currentTime;
-		});
-
-		console.log({ isExists });
-
-		if (!isExists) {
-			console.warn('Ya existe un marcador en este momento');
-			return;
-		}
-
-		chrome.storage.sync.set({
-			[this.currentVideo]: JSON.stringify([...this.currentVideoBookmarks, newBookmark].sort((a, b) => a.time - b.time)),
-		});
 	};
 
 	getTime = (t) => {
@@ -92,8 +107,6 @@ class YoutubeBookmarker {
 			throw new Error('[createButtonElement]: Bookmark button not found');
 		}
 
-		console.log({ youtubeTooltipWrapper: document.querySelector('#player-container .ytp-tooltip') });
-
 		bookmarkBtn.addEventListener('mouseover', (e) => handleEventMouseButton(e));
 		bookmarkBtn.addEventListener('mouseout', (e) => handleEventMouseButton(e));
 
@@ -102,7 +115,7 @@ class YoutubeBookmarker {
 		const handleEventMouseButton = (e) => {
 			const { type } = e;
 			const youtubeTooltipWrapper = document.querySelector('#player-container .ytp-tooltip');
-			const tooltipTextNoTitle = youtubeTooltipWrapper?.querySelector('.ytp-tooltip-text');
+			const tooltipTextNoTitle = youtubeTooltipWrapper?.querySelector('.ytp-tooltip-text-no-title span');
 			const tooltipBg = youtubeTooltipWrapper?.querySelector('.ytp-tooltip-bg');
 
 			if (!youtubeTooltipWrapper || !tooltipTextNoTitle) {
@@ -114,16 +127,17 @@ class YoutubeBookmarker {
 				tooltipTextNoTitle.innerHTML = titleMark;
 				bookmarkBtn.removeAttribute('title');
 
-				const progressBarRect = document
-					.querySelector('#movie_player div.ytp-chapters-container')
-					?.getBoundingClientRect();
+				const bookmarkBtnRect = bookmarkBtn?.getBoundingClientRect();
+				console.log({ bookmarkBtnRect });
 
 				youtubeTooltipWrapper.style.removeProperty('display');
 				youtubeTooltipWrapper.classList.remove('ytp-preview');
-				youtubeTooltipWrapper.style.top = `${progressBarRect.top + 8}px`;
+				youtubeTooltipWrapper.style.top = `${bookmarkBtnRect.top + 10}px`;
 				youtubeTooltipWrapper.style.left = '160.5px';
 				youtubeTooltipWrapper.removeAttribute('aria-hidden');
 				tooltipBg && tooltipBg.style.removeProperty('background');
+
+				console.log({ progressBarRect: bookmarkBtnRect, tooltipTextNoTitle, tooltipBg, youtubeTooltipWrapper });
 
 				return;
 			}
@@ -180,15 +194,20 @@ class YoutubeBookmarker {
 
 	eventChromeOnMessage() {
 		try {
+			chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {});
+
+			// Escuchar los mensajes enviados desde background.js
 			chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+				console.log('Mensaje recibido en content.js:', message);
 				const { type, value, videoId } = message;
 
-				console.log({ message });
+				if (type === 'NEW') {
+					this.currentVideo = videoId;
+					console.log('Nuevo video identificado:', videoId);
+					sendResponse({ status: 'OK', videoId: videoId });
+				}
 
-				// if (type === 'NEW') {
-				// 	currentVideo = videoId;
-				// 	newVideoLoaded();
-				// } else if (type === 'PLAY') {
+				// else if (type === 'PLAY') {
 				// 	youtubePlayer.currentTime = value;
 				// } else if (type === 'DELETE') {
 				// 	currentVideoBookmarks = currentVideoBookmarks.filter((b) => b.time != value);
@@ -196,6 +215,8 @@ class YoutubeBookmarker {
 
 				// 	response(currentVideoBookmarks);
 				// }
+
+				return true; // Esto es importante si `sendResponse` se usa de forma asíncrona
 			});
 		} catch (error) {
 			console.error('Error in chrome.runtime.onMessage.addListener:', error);
@@ -203,10 +224,13 @@ class YoutubeBookmarker {
 	}
 }
 
+const youtubeBookmarker = new YoutubeBookmarker();
+youtubeBookmarker.eventChromeOnMessage();
+
 window.addEventListener('load', () => {
 	try {
 		console.warn('Contenido cargado');
-		new YoutubeBookmarker();
+		youtubeBookmarker.observeDOMChanges();
 	} catch (error) {
 		console.error('Error crear instancia YoutubeBookmarker:', error);
 	}
