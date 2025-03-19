@@ -22,8 +22,8 @@ class YoutubeBookmarker {
 
 			if (this.youtubeLeftControls && this.youtubePlayer) {
 				console.log('Elementos encontrados, inicializando...');
-				observer.disconnect(); // Detiene la observación una vez que los elementos están listos
 				this.init();
+				observer.disconnect(); // Detiene la observación una vez que los elementos están listos
 			}
 		});
 
@@ -102,7 +102,7 @@ class YoutubeBookmarker {
 		const handleEventMouseButton = (e) => {
 			const { type } = e;
 			const youtubeTooltipWrapper = document.querySelector('#player-container .ytp-tooltip');
-			const tooltipTextNoTitle = youtubeTooltipWrapper?.querySelector('.ytp-tooltip-text-no-title .ytp-tooltip-text');
+			const tooltipTextNoTitle = youtubeTooltipWrapper?.querySelector('.ytp-tooltip-text');
 			const tooltipBg = youtubeTooltipWrapper?.querySelector('.ytp-tooltip-bg');
 
 			if (!youtubeTooltipWrapper || !tooltipTextNoTitle) {
@@ -114,9 +114,13 @@ class YoutubeBookmarker {
 				tooltipTextNoTitle.innerHTML = titleMark;
 				bookmarkBtn.removeAttribute('title');
 
+				const progressBarRect = document
+					.querySelector('#movie_player div.ytp-chapters-container')
+					?.getBoundingClientRect();
+
 				youtubeTooltipWrapper.style.removeProperty('display');
 				youtubeTooltipWrapper.classList.remove('ytp-preview');
-				youtubeTooltipWrapper.style.top = '188px';
+				youtubeTooltipWrapper.style.top = `${progressBarRect.top + 8}px`;
 				youtubeTooltipWrapper.style.left = '160.5px';
 				youtubeTooltipWrapper.removeAttribute('aria-hidden');
 				tooltipBg && tooltipBg.style.removeProperty('background');
@@ -164,12 +168,11 @@ class YoutubeBookmarker {
 
 		this.currentVideoBookmarks = await this.fetchBookmarks();
 
-		if (bookmarkBtnExists) {
+		if (!bookmarkBtnExists) {
 			const bookmarkBtn = this.createButtonElement();
 
 			this.setEventMouseButton(bookmarkBtn);
 			this.youtubeLeftControls.appendChild(bookmarkBtn);
-			console.log({ bookmarkBtn, youtubeLeftControls: this.youtubeLeftControls });
 
 			bookmarkBtn.addEventListener('click', this.addNewBookmarkEventHandler);
 		}
